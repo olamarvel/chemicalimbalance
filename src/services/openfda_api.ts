@@ -1,4 +1,3 @@
-
 import type { DrugComponent, OpenFDADrugInfo } from '@/types';
 
 const FDA_API_BASE_URL = 'https://api.fda.gov/drug';
@@ -46,7 +45,7 @@ export async function fetchDrugDetailsFromFDA(drugName: string): Promise<OpenFDA
 
   try {
     // Fetch components (active ingredients)
-    const drugSFDAUrl = `${FDA_API_BASE_URL}/drugsfda.json?search=(openfda.brand_name.exact:"${encodedDrugName}"+OR+openfda.generic_name.exact:"${encodedDrugName}")&limit=1`;
+    const drugSFDAUrl = `${FDA_API_BASE_URL}/drugsfda.json?search=(openfda.brand_name:"${encodedDrugName}"+OR+openfda.generic_name:"${encodedDrugName}")&limit=1`;
     const fdaResponse = await fetch(drugSFDAUrl, { headers: { 'User-Agent': 'ChemicalImbalanceApp/1.0' } });
 
     if (!fdaResponse.ok) {
@@ -73,7 +72,7 @@ export async function fetchDrugDetailsFromFDA(drugName: string): Promise<OpenFDA
 
 
     // Fetch side effects (adverse reactions) from label information
-    const labelUrl = `${FDA_API_BASE_URL}/label.json?search=(openfda.brand_name.exact:"${encodedDrugName}"+OR+openfda.generic_name.exact:"${encodedDrugName}")&limit=1`;
+    const labelUrl = `${FDA_API_BASE_URL}/label.json?search=(openfda.brand_name:"${encodedDrugName}"+OR+openfda.generic_name:"${encodedDrugName}")&limit=1`;
     const labelResponse = await fetch(labelUrl, { headers: { 'User-Agent': 'ChemicalImbalanceApp/1.0' } });
     
     let sideEffects: string[] = [];
@@ -114,4 +113,3 @@ export async function fetchDrugDetailsFromFDA(drugName: string): Promise<OpenFDA
     return null;
   }
 }
-
