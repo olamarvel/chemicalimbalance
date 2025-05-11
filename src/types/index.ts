@@ -1,16 +1,19 @@
 
 export interface DrugComponent {
   name: string;
+  // strength might be available from API, can be added if needed later
+  // strength?: string; 
 }
 
-export interface SideEffect {
-  name: string;
-}
+// This type is no longer used as side effects will be represented as raw strings from the API.
+// export interface SideEffect {
+//   name: string;
+// }
 
 export interface Report {
   drugName: string;
   components: DrugComponent[];
-  sideEffects: SideEffect[];
+  sideEffects: string[]; // Changed from SideEffect[] to string[]
   aiSummary: string;
   timestamp: string;
 }
@@ -28,4 +31,10 @@ export interface ExtractDrugInfoInput {
 
 export interface ExtractDrugInfoOutput {
   drugName: string;
+}
+
+// Internal type for fetching data from OpenFDA
+export interface OpenFDADrugInfo {
+  components: DrugComponent[];
+  sideEffects: string[];
 }

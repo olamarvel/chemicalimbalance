@@ -1,3 +1,4 @@
+
 import type { Report } from "@/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,21 +18,25 @@ export function ReportSection({ report }: ReportSectionProps) {
     <Card className="w-full shadow-lg animate-in fade-in-50 duration-500">
       <CardHeader>
         <CardTitle className="text-3xl text-primary">{report.drugName}</CardTitle>
-        <CardDescription>Detailed analysis and personalized AI summary.</CardDescription>
+        <CardDescription>Detailed analysis and personalized AI summary from OpenFDA and AI.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div>
           <h3 className="flex items-center text-xl font-semibold mb-2">
             <FlaskConical className="mr-2 h-5 w-5 text-primary" />
-            Components
+            Active Components
           </h3>
-          <div className="flex flex-wrap gap-2">
-            {report.components.map((component) => (
-              <Badge key={component.name} variant="secondary" className="text-sm px-3 py-1">
-                {component.name}
-              </Badge>
-            ))}
-          </div>
+          {report.components.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {report.components.map((component) => (
+                <Badge key={component.name} variant="secondary" className="text-sm px-3 py-1">
+                  {component.name}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No active components listed.</p>
+          )}
         </div>
 
         <Separator />
@@ -39,13 +44,17 @@ export function ReportSection({ report }: ReportSectionProps) {
         <div>
           <h3 className="flex items-center text-xl font-semibold mb-2">
             <AlertTriangle className="mr-2 h-5 w-5 text-destructive" />
-            Potential Side Effects
+            Potential Side Effects / Warnings
           </h3>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            {report.sideEffects.map((effect) => (
-              <li key={effect.name}>{effect.name}</li>
-            ))}
-          </ul>
+          {report.sideEffects.length > 0 ? (
+            <ul className="list-disc list-inside space-y-2 text-muted-foreground">
+              {report.sideEffects.map((effectText, index) => (
+                <li key={index} className="whitespace-pre-wrap">{effectText}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-muted-foreground">No side effects or warnings information available from the source.</p>
+          )}
         </div>
 
         <Separator />
@@ -62,7 +71,7 @@ export function ReportSection({ report }: ReportSectionProps) {
       </CardContent>
       <CardFooter className="text-xs text-muted-foreground">
         <Clock className="mr-1.5 h-3.5 w-3.5" />
-        Report generated {timeAgo}.
+        Report generated {timeAgo}. Drug data sourced from OpenFDA.
       </CardFooter>
     </Card>
   );
