@@ -1,3 +1,4 @@
+
 export interface DrugComponent {
   name: string;
 }
@@ -17,5 +18,14 @@ export interface Report {
 // Used for the form
 export interface DrugAnalysisInput {
   drugName: string;
-  medicalConditions: string;
+  medicalConditions?: string; // Make optional to align with form field
+}
+
+// Types for ExtractDrugInfoFromImage flow
+export interface ExtractDrugInfoInput {
+  photoDataUri: string;
+}
+
+export interface ExtractDrugInfoOutput {
+  drugName: string;
 }
