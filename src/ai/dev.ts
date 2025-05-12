@@ -5,3 +5,5 @@ config();
 import '@/ai/flows/summarize-report.ts';
 import '@/ai/flows/personalized-advice.ts';
 import '@/ai/flows/extract-drug-info-flow.ts';
+import '@/ai/flows/process-side-effect-flow.ts';
+
