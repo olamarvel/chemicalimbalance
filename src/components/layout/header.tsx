@@ -14,7 +14,7 @@ export function AppHeader({ onReset }: HeaderProps) {
           <Logo className="h-8 w-8 text-primary" />
           <h1 className="text-2xl font-bold text-primary">Chemical Imbalance</h1>
         </div>
-        <Button variant="outline" size="icon" onClick={onReset} aria-label="Reset Session">
+        <Button variant="outline" size="icon" onClick={onReset} disabled aria-label="Reset Session">
           <RotateCcw className="h-5 w-5" />
         </Button>
       </div>

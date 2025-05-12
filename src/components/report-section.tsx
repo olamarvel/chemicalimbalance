@@ -1,4 +1,3 @@
-
 import type { Report } from "@/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +9,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useState } from 'react';
 import { generateReportImage } from '@/lib/image-generator';
 import { useToast } from "@/hooks/use-toast";
-import { SupportModal } from "@/components/support-modal"; // Added import
+import { SupportModal } from "@/components/support-modal";
 
 interface ReportSectionProps {
   report: Report;
@@ -21,8 +20,10 @@ export function ReportSection({ report, medicalConditions }: ReportSectionProps)
   const { toast } = useToast();
   const timeAgo = formatDistanceToNow(new Date(report.timestamp), { addSuffix: true });
   const [isSideEffectsExpanded, setIsSideEffectsExpanded] = useState(false);
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false); // New state for support modal
-  const SIDE_EFFECT_TRUNCATE_THRESHOLD = 3; 
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [imageDataUri, setImageDataUri] = useState<string | null>(null);
+  const [canShare, setCanShare] = useState(false);
+  const SIDE_EFFECT_TRUNCATE_THRESHOLD = 3;
 
   const handleShareReport = async () => {
     setIsGeneratingImage(true); // Show support modal
@@ -30,17 +31,54 @@ export function ReportSection({ report, medicalConditions }: ReportSectionProps)
       title: "Generating Report Image...",
       description: "Please wait a moment while we create your shareable image.",
     });
+
     try {
-      const imageDataUri = await generateReportImage(report, medicalConditions);
-      
-      const fetchRes = await fetch(imageDataUri);
+      const imageDataUriValue = await generateReportImage(report, medicalConditions);
+      setImageDataUri(imageDataUriValue);
+
+      setTimeout(async () => {
+        setCanShare(true);
+      }, 5000); // Delay the share attempt by 5 seconds
+
+    } catch (error) {
+      console.error("Error generating report image:", error);
+      setIsGeneratingImage(false); // Hide modal on generation error
+      toast({
+        variant: "destructive",
+        title: "Error Generating Report",
+        description: "Could not generate the report image. Please try again.",
+      });
+    }
+  }
+
+  const handleSupportModalOpenChange = (open: boolean) => {
+    setIsGeneratingImage(open);
+    if (!open) {
+      // Optionally reset other states when modal is closed by outside click/escape
+      setCanShare(false);
+      setImageDataUri(null);
+    }
+  };
+
+  const handleShareButtonClick = async (dataUri: string | null) => {
+    if (!dataUri) {
+      toast({
+        variant: "destructive",
+        title: "Error Sharing Report",
+        description: "Report image not available for sharing.",
+      });
+      return;
+    }
+
+    try {
+      const fetchRes = await fetch(dataUri);
       const blob = await fetchRes.blob();
-      const imageFile = new File([blob], `${report.drugName}-Report.png`, { type: 'image/png' });
+      const imageFile = new File([blob], `${report?.drugName}-Report.png`, { type: 'image/png' });
 
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [imageFile] })) {
         await navigator.share({
-          title: `${report.drugName} - Chemical Imbalance Report`,
-          text: `Check out this personalized report for ${report.drugName}.`,
+          title: `${report?.drugName} - Chemical Imbalance Report`,
+          text: `Check out this personalized report for ${report?.drugName}.`,
           files: [imageFile],
         });
         toast({
@@ -48,9 +86,10 @@ export function ReportSection({ report, medicalConditions }: ReportSectionProps)
           description: "The report image has been prepared for sharing.",
         });
       } else {
+        // Fallback for browsers that don't support Web Share API
         const link = document.createElement('a');
-        link.download = `${report.drugName}-Report.png`;
-        link.href = imageDataUri;
+        link.download = `${report?.drugName}-Report.png`;
+        link.href = dataUri;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -58,7 +97,7 @@ export function ReportSection({ report, medicalConditions }: ReportSectionProps)
           title: "Report Image Downloaded",
           description: "The report image has been downloaded to your device.",
           action: (
-            <Button variant="ghost" size="sm" onClick={() => window.open(imageDataUri, '_blank')}>
+            <Button variant="ghost" size="sm" onClick={() => window.open(dataUri, '_blank')}>
               <Download className="mr-2 h-4 w-4" />
               Open Image
             </Button>
@@ -73,15 +112,16 @@ export function ReportSection({ report, medicalConditions }: ReportSectionProps)
           description: "You cancelled the sharing process.",
         });
       } else {
-        console.error("Error generating or sharing report image:", error);
+        console.error("Error sharing report image:", error);
         toast({
           variant: "destructive",
           title: "Error Sharing Report",
-          description: "Could not generate or share the report image. Please try again.",
+          description: "Could not share the report image. Please try again.",
         });
       }
     } finally {
-      setIsGeneratingImage(false); // Hide support modal
+       // Close the modal after sharing attempt
+       handleSupportModalOpenChange(false); // Use the new handler
     }
   };
 
@@ -135,11 +175,11 @@ export function ReportSection({ report, medicalConditions }: ReportSectionProps)
               Potential Side Effects / Warnings
             </h3>
             {report.sideEffects.length > 0 ? (
-              <div> 
+              <div>
                 <div
                   className={cn(
                     "relative overflow-hidden transition-all duration-300 ease-in-out",
-                    isSideEffectsExpanded ? "max-h-[1000px]" : "max-h-32" 
+                    isSideEffectsExpanded ? "max-h-[1000px]" : "max-h-32"
                   )}
                 >
                   <ul className="list-disc list-inside space-y-2 text-muted-foreground">
@@ -194,7 +234,13 @@ export function ReportSection({ report, medicalConditions }: ReportSectionProps)
           Report generated {timeAgo}. Drug data sourced from OpenFDA.
         </CardFooter>
       </Card>
-      <SupportModal isOpen={isGeneratingImage} />
+      <SupportModal
+        isOpen={isGeneratingImage}
+        onOpenChange={handleSupportModalOpenChange} // Use the new handler function
+        isImageGenerated={!!imageDataUri}
+        canShare={canShare}
+        onShareButtonClick={() => handleShareButtonClick(imageDataUri)}
+      />
     </>
   );
 }

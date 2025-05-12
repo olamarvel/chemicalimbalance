@@ -11,7 +11,7 @@ import { RecentReportCard } from '@/components/recent-report-card';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PrivacyNoticeModal } from '@/components/privacy-notice-modal';
-import { Terminal, Coffee, Twitter, Mail, Loader2 } from "lucide-react";
+import { Terminal, Coffee, Twitter, Mail, Loader2, PillBottle, Linkedin } from "lucide-react";
 
 const RECENT_SUMMARY_KEY = 'chemicalImbalanceRecentSummary';
 const PRIVACY_NOTICE_KEY = 'chemicalImbalancePrivacyAccepted_v1';
@@ -41,7 +41,7 @@ export default function HomePage() {
       }
     } catch (e) {
       console.warn("Could not access localStorage:", e);
-       // If localStorage is not available, assume privacy not accepted for safety, show modal
+      // If localStorage is not available, assume privacy not accepted for safety, show modal
       if (!privacyAccepted) {
         setShowPrivacyModal(true);
       }
@@ -127,9 +127,9 @@ export default function HomePage() {
           )}
 
           {isLoading && !currentReport && (
-             <div className="flex justify-center items-center p-8">
-                <p className="text-lg text-muted-foreground">Generating report, please wait...</p>
-             </div>
+            <div className="flex justify-center items-center p-8">
+              <p className="text-lg text-muted-foreground">Generating report, please wait...</p>
+            </div>
           )}
 
           {currentReport && <ReportSection report={currentReport} medicalConditions={submittedMedicalConditions} />}
@@ -137,22 +137,22 @@ export default function HomePage() {
       </main>
       <footer className="py-6 text-center text-sm text-muted-foreground border-t mt-12">
         <div className="space-y-2 mb-6">
-            <p className="text-xs">
-              Built by a sickle cell disordered warrior for warriors everywhere.
-              Now you can show your overbearing aunties, parents, and well-wishers just why that drug isn&apos;t meant for you.
-            </p>
-            <p className="text-xs font-semibold">
-              Note: This app is used at the user&apos;s own risk.
-            </p>
-            <p>
-             Disclaimer: This tool provides information for educational purposes only and is not a substitute for professional medical advice.
-            </p>
+          <p className="text-xs">
+            Built by a sickle cell disordered warrior for warriors everywhere.
+            Now you can show your overbearing aunties, parents, and well-wishers just why that drug isn&apos;t meant for you.
+          </p>
+          <p className="text-xs font-semibold">
+            Note: This app is used at the user&apos;s own risk.
+          </p>
+          <p>
+            Disclaimer: This tool provides information for educational purposes only and is not a substitute for professional medical advice.
+          </p>
         </div>
         <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-4">
-          <Button variant="outline" size="sm" asChild>
-            <a href="https://www.buymeacoffee.com/olamarvel" target="_blank" rel="noopener noreferrer">
-              <Coffee className="mr-2 h-4 w-4" />
-              Buy Me A Coffee
+          <Button variant="secondary" size="sm" asChild>
+            <a href="https://buymeacoffee.com/olatundema" target="_blank" rel="noopener noreferrer">
+              <PillBottle className="mr-2 h-4 w-4" />
+              Buy Me My SCD Medications. Just a token!
             </a>
           </Button>
           <div className="flex items-center gap-3">
@@ -162,7 +162,14 @@ export default function HomePage() {
             <a href="https://twitter.com/olamarvelcreate" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors" aria-label="Developer's Twitter profile">
               <Twitter className="h-5 w-5" />
             </a>
+            <a href="https://www.linkedin.com/in/marvelous-anthony-olatunde-506486243/" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors" aria-label="Developer's Linkedin profile">
+              <Linkedin className="h-5 w-5" />
+            </a>
+            <a href="https://www.linkedin.com/in/marvelous-anthony-olatunde-506486243/" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors" aria-label="Developer's Linkedin profile">
+              <p>opened for roles.</p>
+            </a>
           </div>
+
         </div>
       </footer>
       <PrivacyNoticeModal isOpen={showPrivacyModal && !privacyAccepted} onAccept={handleAcceptPrivacy} />
