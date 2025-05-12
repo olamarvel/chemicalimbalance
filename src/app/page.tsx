@@ -9,9 +9,12 @@ import { DrugForm } from '@/components/drug-form';
 import { ReportSection } from '@/components/report-section';
 import { RecentReportCard } from '@/components/recent-report-card';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { PrivacyNoticeModal } from '@/components/privacy-notice-modal';
+import { Terminal, Coffee, Twitter, Mail, Loader2 } from "lucide-react";
 
 const RECENT_SUMMARY_KEY = 'chemicalImbalanceRecentSummary';
+const PRIVACY_NOTICE_KEY = 'chemicalImbalancePrivacyAccepted_v1';
 
 export default function HomePage() {
   const [currentReport, setCurrentReport] = useState<Report | null>(null);
@@ -20,19 +23,37 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [isClient, setIsClient] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+
   useEffect(() => {
+    setIsClient(true);
     try {
       const storedSummary = localStorage.getItem(RECENT_SUMMARY_KEY);
       if (storedSummary) {
         setRecentReportSummary(storedSummary);
       }
+      const accepted = localStorage.getItem(PRIVACY_NOTICE_KEY) === 'true';
+      setPrivacyAccepted(accepted);
+      if (!accepted) {
+        setShowPrivacyModal(true);
+      }
     } catch (e) {
-      // localStorage might not be available (e.g. SSR, private browsing)
-      console.warn("Could not access localStorage for recent summary:", e);
+      console.warn("Could not access localStorage:", e);
+       // If localStorage is not available, assume privacy not accepted for safety, show modal
+      if (!privacyAccepted) {
+        setShowPrivacyModal(true);
+      }
     }
   }, []);
 
+
   const handleFormSubmit = async (data: DrugAnalysisInput) => {
+    if (!privacyAccepted) {
+      setShowPrivacyModal(true);
+      return;
+    }
     setIsLoading(true);
     setError(null);
     setCurrentReport(null);
@@ -67,10 +88,29 @@ export default function HomePage() {
     }
   };
 
+  const handleAcceptPrivacy = () => {
+    try {
+      localStorage.setItem(PRIVACY_NOTICE_KEY, 'true');
+    } catch (e) {
+      console.warn("Could not save privacy acceptance to localStorage:", e);
+    }
+    setPrivacyAccepted(true);
+    setShowPrivacyModal(false);
+  };
+
+  if (!isClient) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background">
+        <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        <p className="mt-4 text-muted-foreground">Loading application...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col mx-auto py-8 px-4">
       <AppHeader onReset={handleReset} />
-      <main className="flex-1 container mx-auto py-8 px-4">
+      <main className="flex-1 container ">
         <div className="max-w-2xl mx-auto space-y-8">
           {recentReportSummary && !currentReport && !isLoading && (
             <RecentReportCard summary={recentReportSummary} />
@@ -95,9 +135,37 @@ export default function HomePage() {
           {currentReport && <ReportSection report={currentReport} medicalConditions={submittedMedicalConditions} />}
         </div>
       </main>
-      <footer className="py-6 text-center text-sm text-muted-foreground border-t">
-        Disclaimer: This tool provides information for educational purposes only and is not a substitute for professional medical advice.
+      <footer className="py-6 text-center text-sm text-muted-foreground border-t mt-12">
+        <div className="space-y-2 mb-6">
+            <p className="text-xs">
+              Built by a sickle cell disordered warrior for warriors everywhere.
+              Now you can show your overbearing aunties, parents, and well-wishers just why that drug isn&apos;t meant for you.
+            </p>
+            <p className="text-xs font-semibold">
+              Note: This app is used at the user&apos;s own risk.
+            </p>
+            <p>
+             Disclaimer: This tool provides information for educational purposes only and is not a substitute for professional medical advice.
+            </p>
+        </div>
+        <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-4">
+          <Button variant="outline" size="sm" asChild>
+            <a href="https://www.buymeacoffee.com/olamarvel" target="_blank" rel="noopener noreferrer">
+              <Coffee className="mr-2 h-4 w-4" />
+              Buy Me A Coffee
+            </a>
+          </Button>
+          <div className="flex items-center gap-3">
+            <a href="mailto:olatundemarvelousanthony@gmail.com" className="hover:text-primary transition-colors" aria-label="Email the developer">
+              <Mail className="h-5 w-5" />
+            </a>
+            <a href="https://twitter.com/olamarvelcreate" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors" aria-label="Developer's Twitter profile">
+              <Twitter className="h-5 w-5" />
+            </a>
+          </div>
+        </div>
       </footer>
+      <PrivacyNoticeModal isOpen={showPrivacyModal && !privacyAccepted} onAccept={handleAcceptPrivacy} />
     </div>
   );
 }
