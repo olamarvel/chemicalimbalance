@@ -1,33 +1,14 @@
-import type { DrugComponent, OpenFDADrugInfo } from '@/types';
+
+import type { OpenFDASideEffectInfo } from '@/types';
 
 const FDA_API_BASE_URL = 'https://api.fda.gov/drug';
 
-interface FDAFDAResult {
-  application_number: string;
-  sponsor_name: string;
-  products: {
-    product_number: string;
-    brand_name: string;
-    active_ingredients: {
-      name: string;
-      strength: string;
-    }[];
-    dosage_form: string;
-    route: string;
-    marketing_status: string;
-  }[];
-  openfda: {
-    brand_name?: string[];
-    generic_name?: string[];
-    manufacturer_name?: string[];
-    [key: string]: any;
-  };
-}
-
+// Interface for the OpenFDA Label API result structure (simplified)
 interface FDALabelResult {
   openfda: {
     brand_name?: string[];
     generic_name?: string[];
+    substance_name?: string[]; // Often contains the active ingredients
     manufacturer_name?: string[];
     [key: string]: any;
   };
@@ -36,80 +17,77 @@ interface FDALabelResult {
   [key: string]: any;
 }
 
-
-export async function fetchDrugDetailsFromFDA(drugName: string): Promise<OpenFDADrugInfo | null> {
-  if (!drugName || drugName.trim() === '') {
-    return null;
+/**
+ * Fetches potential side effects from OpenFDA for a list of active ingredients.
+ * @param ingredients An array of active ingredient names.
+ * @returns A promise resolving to an OpenFDASideEffectInfo object containing a unique list of side effects, or null if no ingredients provided or error.
+ */
+export async function fetchSideEffectsForIngredients(ingredients: string[]): Promise<OpenFDASideEffectInfo | null> {
+  if (!ingredients || ingredients.length === 0) {
+    console.warn("No ingredients provided to fetch side effects for.");
+    return { sideEffects: [] }; // Return empty if no ingredients
   }
-  const encodedDrugName = encodeURIComponent(drugName.trim());
+
+  // Construct the search query for OpenFDA Label API
+  // Search in substance_name, generic_name, or brand_name fields
+  const ingredientQuery = ingredients
+      .map(ing => `"${ing.trim()}"`) // Ensure ingredients are quoted
+      .join('+OR+');
+  const searchQuery = `(openfda.substance_name:(${ingredientQuery})+OR+openfda.generic_name:(${ingredientQuery})+OR+openfda.brand_name:(${ingredientQuery}))`;
+
+  // Limit results to potentially reduce noise, increase if needed
+  const limit = 5 * ingredients.length; // Fetch a few results per ingredient potentially
+  const labelUrl = `${FDA_API_BASE_URL}/label.json?search=${searchQuery}&limit=${limit}`;
+
+  console.log(`Querying OpenFDA Label API for ingredients: ${ingredients.join(', ')}`);
+  console.log(`OpenFDA URL: ${labelUrl}`);
+
 
   try {
-    // Fetch components (active ingredients)
-    const drugSFDAUrl = `${FDA_API_BASE_URL}/drugsfda.json?search=(openfda.brand_name:"${encodedDrugName}"+OR+openfda.generic_name:"${encodedDrugName}")&limit=1`;
-    const fdaResponse = await fetch(drugSFDAUrl, { headers: { 'User-Agent': 'ChemicalImbalanceApp/1.0' } });
+    const labelResponse = await fetch(labelUrl, {
+      headers: { 'User-Agent': 'ChemicalImbalanceApp/1.0' }
+    });
 
-    if (!fdaResponse.ok) {
-      console.error(`OpenFDA drugsfda API error for ${drugName}: ${fdaResponse.status}`);
-      // If primary drug info fails, don't proceed to label info for this simple implementation
-      return null; 
+    if (!labelResponse.ok) {
+      console.error(`OpenFDA label API error for ingredients [${ingredients.join(', ')}]: ${labelResponse.status}`);
+      // Return empty side effects on API error, maybe retry or log differently
+      return { sideEffects: [] };
     }
 
-    const fdaData = await fdaResponse.json();
+    const labelData = await labelResponse.json();
+    let collectedSideEffects: string[] = [];
 
-    let components: DrugComponent[] = [];
-    if (fdaData.results && fdaData.results.length > 0) {
-      const result = fdaData.results[0] as FDAFDAResult;
-      if (result.products && result.products.length > 0 && result.products[0].active_ingredients) {
-        components = result.products[0].active_ingredients.map(ing => ({ name: ing.name }));
-      }
-    }
-     // If no components found from drugS FDA, it might not be a recognized drug.
-    if (components.length === 0) {
-        // Attempt to use generic name from label if brand name search yielded no components.
-        // This scenario is less likely if search includes generic_name already.
-        console.warn(`No active ingredients found for ${drugName} via drugS FDA. Returning no components.`);
-    }
-
-
-    // Fetch side effects (adverse reactions) from label information
-    const labelUrl = `${FDA_API_BASE_URL}/label.json?search=(openfda.brand_name:"${encodedDrugName}"+OR+openfda.generic_name:"${encodedDrugName}")&limit=1`;
-    const labelResponse = await fetch(labelUrl, { headers: { 'User-Agent': 'ChemicalImbalanceApp/1.0' } });
-    
-    let sideEffects: string[] = [];
-    if (labelResponse.ok) {
-      const labelData = await labelResponse.json();
-      if (labelData.results && labelData.results.length > 0) {
-        const result = labelData.results[0] as FDALabelResult;
+    if (labelData.results && labelData.results.length > 0) {
+       console.log(`Found ${labelData.results.length} potential label results from OpenFDA.`);
+       labelData.results.forEach((result: FDALabelResult) => {
+        // Prioritize adverse_reactions, then warnings
         if (result.adverse_reactions && result.adverse_reactions.length > 0) {
-          sideEffects = result.adverse_reactions;
+          collectedSideEffects.push(...result.adverse_reactions);
         } else if (result.warnings && result.warnings.length > 0) {
-          // Fallback to warnings if adverse_reactions is not present
-          sideEffects = [`Potential warnings: ${result.warnings.join(' ')}`];
+          // Prefix warnings to distinguish them if needed, or just add them
+           collectedSideEffects.push(...result.warnings.map(w => `Warning: ${w}`));
         }
-      }
+      });
     } else {
-      console.warn(`OpenFDA label API error for ${drugName}: ${labelResponse.status}. Proceeding without side effects.`);
+        console.log(`No label results found on OpenFDA for ingredients: ${ingredients.join(', ')}`);
     }
-    
-    // If no components were found but we found side effects, it's an inconsistent state.
-    // For this application, we require components to consider it a valid drug.
-    if (components.length === 0 && sideEffects.length > 0) {
-        console.warn(`Found side effects for ${drugName} but no components. Treating as 'not found'.`);
-        return null;
-    }
-    
-    // If after all attempts, we still have no components, consider the drug not found or info incomplete.
-    if (components.length === 0) {
-        return null;
-    }
+
+    // Deduplicate and clean up the collected side effects
+    const uniqueSideEffects = Array.from(new Set(collectedSideEffects.map(s => s.trim()).filter(s => s.length > 0)));
+
+    console.log(`Collected ${uniqueSideEffects.length} unique side effects/warnings from OpenFDA.`);
+
 
     return {
-      components,
-      sideEffects,
+      sideEffects: uniqueSideEffects,
     };
 
   } catch (error) {
-    console.error(`Failed to fetch drug details for ${drugName} from OpenFDA:`, error);
-    return null;
+    console.error(`Failed to fetch or process side effects from OpenFDA for ingredients [${ingredients.join(', ')}]:`, error);
+    return { sideEffects: [] }; // Return empty on unexpected errors
   }
 }
+
+// Remove the old fetchDrugDetailsFromFDA function as it's replaced by the NAFDAC + new OpenFDA logic flow
+// export async function fetchDrugDetailsFromFDA(drugName: string): Promise<OpenFDADrugInfo | null> { ... }
+

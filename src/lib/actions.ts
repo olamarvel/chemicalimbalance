@@ -3,65 +3,91 @@
 
 import { summarizeReport, type SummarizeReportInput } from '@/ai/flows/summarize-report';
 import { processSideEffect, type ProcessSideEffectInput } from '@/ai/flows/process-side-effect-flow';
-import type { Report, DrugAnalysisInput } from '@/types';
-import { fetchDrugDetailsFromFDA } from '@/services/openfda_api';
+import type { Report, DrugAnalysisInput, DrugComponent } from '@/types';
+import { fetchNafdacDrugDetails, parseActiveIngredients } from '@/services/nafdac_api';
+import { fetchSideEffectsForIngredients } from '@/services/openfda_api';
 
 export async function getDrugReportAction(input: DrugAnalysisInput): Promise<Report | { error: string }> {
-  const drugInfo = await fetchDrugDetailsFromFDA(input.drugName);
+  console.log(`Starting analysis for input: ${input.drugName}`);
 
-  if (!drugInfo) {
-    return { error: `Information for "${input.drugName}" not found via OpenFDA. Please check the drug name or try a different one.` };
+  // 1. Fetch drug details from NAFDAC API
+  const nafdacResults = await fetchNafdacDrugDetails(input.drugName);
+
+  if (!nafdacResults || nafdacResults.length === 0) {
+    return { error: `Information for "${input.drugName}" not found via NAFDAC Greenbook. Please check the drug name or NAFDAC number.` };
   }
 
+  // For simplicity, use the first match from NAFDAC.
+  // A more complex app might allow the user to choose if multiple matches occur.
+  const drugInfo = nafdacResults[0];
+  console.log(`NAFDAC found: ${drugInfo.product_name} (${drugInfo.nafdac_no})`);
+
+  // 2. Parse active ingredients from NAFDAC result
+  const activeIngredientNames = parseActiveIngredients(drugInfo.active_ingredients);
+
+  if (activeIngredientNames.length === 0) {
+    return { error: `Could not identify active ingredients for "${drugInfo.product_name}" from NAFDAC data.` };
+  }
+  console.log(`Parsed active ingredients: ${activeIngredientNames.join(', ')}`);
+
+  const components: DrugComponent[] = activeIngredientNames.map(name => ({ name }));
+
+  // 3. Fetch side effects from OpenFDA based on active ingredients
+  const openFdaSideEffectInfo = await fetchSideEffectsForIngredients(activeIngredientNames);
+  const rawSideEffects = openFdaSideEffectInfo?.sideEffects || [];
+  console.log(`Found ${rawSideEffects.length} raw side effects/warnings from OpenFDA.`);
+
+
+  // 4. Process side effects with AI (if any found)
   let processedSideEffects: string[] = [];
-  if (drugInfo.sideEffects && drugInfo.sideEffects.length > 0) {
+  if (rawSideEffects.length > 0) {
     try {
-      const sideEffectProcessingPromises = drugInfo.sideEffects.map(async (effectString) => {
-        if (!effectString || effectString.trim() === "") {
-          return ""; // Skip empty or whitespace-only strings
-        }
+      const sideEffectProcessingPromises = rawSideEffects.map(async (effectString) => {
+        if (!effectString || effectString.trim() === "") return "";
         const aiInput: ProcessSideEffectInput = { originalEffect: effectString };
         const { bulletPoint } = await processSideEffect(aiInput);
         return bulletPoint;
       });
-      
-      processedSideEffects = (await Promise.all(sideEffectProcessingPromises)).filter(bp => bp && bp.trim() !== ""); // Filter out any empty results
-
+      processedSideEffects = (await Promise.all(sideEffectProcessingPromises)).filter(bp => bp && bp.trim() !== "");
+      console.log(`Processed ${processedSideEffects.length} side effects with AI.`);
     } catch (processingError) {
       console.error("Error processing side effects with AI:", processingError);
-      // Fallback to original side effects if AI processing fails.
-      // Ensure original effects are also filtered for empty strings if this path is taken.
-      processedSideEffects = drugInfo.sideEffects.filter(se => se && se.trim() !== "");
+      // Fallback to raw side effects if AI processing fails, filtering empty ones
+      processedSideEffects = rawSideEffects.filter(se => se && se.trim() !== "");
+      console.log(`AI processing failed, falling back to ${processedSideEffects.length} raw side effects.`);
     }
   }
-  // If after processing (or fallback) there are no side effects, ensure it's an empty array
-  if (!processedSideEffects) {
-    processedSideEffects = [];
-  }
+   // Ensure it's an empty array if no side effects after processing/fallback
+   processedSideEffects = processedSideEffects || [];
 
 
+  // 5. Generate AI summary
   const summaryAiInput: SummarizeReportInput = {
-    drugName: input.drugName,
-    components: drugInfo.components.map(c => c.name),
-    sideEffects: processedSideEffects, // Use AI-processed or original (if fallback) side effects
+    drugName: drugInfo.product_name, // Use the actual product name from NAFDAC
+    components: activeIngredientNames,
+    sideEffects: processedSideEffects, // Use AI-processed or raw (if fallback) side effects
     userConditions: input.medicalConditions || undefined,
   };
 
   try {
     const aiOutput = await summarizeReport(summaryAiInput);
+    console.log("AI summary generated successfully.");
     return {
-      drugName: input.drugName,
-      components: drugInfo.components,
+      drugName: input.drugName, // Keep the original user input query
+      productName: drugInfo.product_name,
+      nafdacNo: drugInfo.nafdac_no,
+      components: components,
       sideEffects: processedSideEffects, // Return the processed side effects
       aiSummary: aiOutput.summary,
       timestamp: new Date().toISOString(),
     };
   } catch (error) {
     console.error("Error calling AI summarizeReport flow:", error);
-    const errorMessage = (typeof error === 'object' && error !== null && 'message' in error) 
-        ? (error as {message: string}).message 
-        : "An unexpected error occurred while generating the main summary.";
-    return { error: `Failed to generate AI summary: ${errorMessage}. Please try again.` };
+    const errorMessage = (typeof error === 'object' && error !== null && 'message' in error)
+        ? (error as {message: string}).message
+        : "An unexpected error occurred while generating the AI summary.";
+    // Still return the fetched data even if AI summary fails? Or return error? Let's return error.
+    // If we wanted to return partial data, we could construct a Report object here with aiSummary as an error message.
+    return { error: `Successfully fetched drug data, but failed to generate AI summary: ${errorMessage}. Please try again.` };
   }
 }
-

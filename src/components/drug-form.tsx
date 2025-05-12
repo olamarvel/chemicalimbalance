@@ -12,6 +12,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription, // Import FormDescription
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,7 +26,8 @@ import { useToast } from "@/hooks/use-toast";
 
 const drugFormSchema = z.object({
   drugName: z.string().min(2, {
-    message: "Drug name must be at least 2 characters.",
+    // Allow shorter input for NAFDAC numbers potentially
+    message: "Input must be at least 2 characters.",
   }),
   medicalConditions: z.string().optional(),
 });
@@ -63,7 +65,7 @@ export function DrugForm({ onSubmit, isLoading }: DrugFormProps) {
         form.setValue("drugName", result.drugName, { shouldValidate: true });
         toast({
           title: "Drug Name Extracted",
-          description: `Found: ${result.drugName}`,
+          description: `Found: ${result.drugName}. You can now analyze.`,
         });
       } else {
         toast({
@@ -98,10 +100,10 @@ export function DrugForm({ onSubmit, isLoading }: DrugFormProps) {
                 name="drugName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Drug Name</FormLabel>
+                    <FormLabel>Drug Name or NAFDAC Number</FormLabel>
                     <div className="flex items-center gap-2">
                       <FormControl>
-                        <Input placeholder="e.g., Paracetamol, Ibuprofen" {...field} disabled={isProcessingImage} />
+                        <Input placeholder="e.g., Paracetamol or A4-1234" {...field} disabled={isProcessingImage || isLoading} />
                       </FormControl>
                       <Button
                         type="button"
@@ -118,6 +120,9 @@ export function DrugForm({ onSubmit, isLoading }: DrugFormProps) {
                         )}
                       </Button>
                     </div>
+                     <FormDescription>
+                      Enter the drug's brand name, generic name, or its NAFDAC registration number.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -137,6 +142,9 @@ export function DrugForm({ onSubmit, isLoading }: DrugFormProps) {
                         disabled={isLoading || isProcessingImage}
                       />
                     </FormControl>
+                     <FormDescription>
+                      Providing conditions helps generate more personalized AI insights.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

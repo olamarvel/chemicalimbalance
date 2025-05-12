@@ -1,8 +1,9 @@
+
 // SummarizeReport.ts
 'use server';
 
 /**
- * @fileOverview Summarizes the components and potential side effects of a drug.
+ * @fileOverview Summarizes the components and potential side effects of a drug, providing context and warnings.
  *
  * - summarizeReport - A function that handles the summarization process.
  * - SummarizeReportInput - The input type for the summarizeReport function.
@@ -13,15 +14,15 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const SummarizeReportInputSchema = z.object({
-  drugName: z.string().describe('The name of the drug to summarize.'),
-  components: z.array(z.string()).describe('The components of the drug.'),
-  sideEffects: z.array(z.string()).describe('The potential side effects of the drug.'),
+  drugName: z.string().describe('The name of the drug to summarize (usually the product name).'),
+  components: z.array(z.string()).describe('The active components (ingredients) of the drug.'),
+  sideEffects: z.array(z.string()).describe('The potential side effects or warnings associated with the drug (already processed into concise points).'),
   userConditions: z.string().optional().describe('User specified medical conditions.'),
 });
 export type SummarizeReportInput = z.infer<typeof SummarizeReportInputSchema>;
 
 const SummarizeReportOutputSchema = z.object({
-  summary: z.string().describe('A summary of the drug components and potential side effects, and personalized advice based on user conditions.'),
+  summary: z.string().describe('A comprehensive summary including drug purpose context, potential relevance to user conditions, side effect overview, and crucial warnings about self-diagnosis and consulting a doctor.'),
 });
 export type SummarizeReportOutput = z.infer<typeof SummarizeReportOutputSchema>;
 
@@ -33,22 +34,59 @@ const prompt = ai.definePrompt({
   name: 'summarizeReportPrompt',
   input: {schema: SummarizeReportInputSchema},
   output: {schema: SummarizeReportOutputSchema},
-  prompt: `You are a pharmacist summarizing the components and potential side effects of a drug. 
+  // Adjust safety settings if needed, e.g., allow discussion of medical topics
+  config: {
+      safetySettings: [
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+          // Potentially adjust other categories like HARASSMENT, HATE_SPEECH, SEXUALLY_EXPLICIT if relevant
+      ],
+  },
+  prompt: `You are a helpful medical information assistant providing a balanced summary about a specific drug. Your goal is to inform, not to provide medical advice.
 
 Drug Name: {{{drugName}}}
 
-Components: {{#each components}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}
+Active Components:
+{{#each components}}
+- {{{this}}}
+{{/each}}
 
-Side Effects: {{#each sideEffects}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}
-
-{{#if userConditions}}
-User Conditions: {{{userConditions}}}
-\nBased on the user's conditions, provide personalized advice regarding the drug.
+Potential Side Effects / Warnings (summarized):
+{{#if sideEffects}}
+{{#each sideEffects}}
+- {{{this}}}
+{{/each}}
+{{else}}
+- No specific side effects or warnings were listed in the available data for these components.
 {{/if}}
 
-Provide a concise summary of the drug's components and potential side effects. Be sure to provide context around the side effects and components.
+{{#if userConditions}}
+User's Stated Conditions: {{{userConditions}}}
+
+Analysis based on Conditions:
+Analyze the relationship between the drug's active components ({{{join components ", "}}}) and the user's stated conditions ({{{userConditions}}}).
+Based on general medical knowledge, briefly indicate if this type of drug *might potentially* be considered by a doctor for conditions like those mentioned. Do NOT state it *is* used or *should* be used. Frame it cautiously (e.g., "Drugs containing [component] are sometimes used in managing...", "Component X has properties relevant to...").
+{{else}}
+User did not specify any medical conditions.
+{{/if}}
+
+Summary Task:
+1. Briefly explain the general purpose or class of the drug based on its active components (e.g., "This drug contains components typically used as pain relievers/antibiotics/antihistamines...").
+2. Provide context for the side effects, mentioning they represent potential risks and may not affect everyone.
+{{#if userConditions}}
+3. Incorporate the cautious analysis regarding the user's conditions from above.
+{{/if}}
+4. Conclude with a **CRUCIAL and PROMINENT** warning: Emphasize that this information is NOT a substitute for professional medical advice. Strongly advise the user against self-diagnosing or self-medicating. Urge them to consult a qualified healthcare provider (doctor, pharmacist) for any health concerns, before starting or stopping any medication, and to discuss whether this specific drug is appropriate for them, considering their full medical history and other medications. Highlight that side effects can vary and some may be serious, requiring immediate medical attention.
 `,
 });
+
+
+// Helper for Handlebars to join array elements
+import Handlebars from 'handlebars';
+Handlebars.registerHelper('join', function(context, separator) {
+  if (!Array.isArray(context)) return '';
+  return context.join(separator);
+});
+
 
 const summarizeReportFlow = ai.defineFlow(
   {
@@ -57,7 +95,20 @@ const summarizeReportFlow = ai.defineFlow(
     outputSchema: SummarizeReportOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    return output!;
+    // Ensure components array is not empty for the prompt
+    const populatedInput = {
+      ...input,
+      components: input.components.length > 0 ? input.components : ['Unknown component'],
+    };
+    const {output} = await prompt(populatedInput);
+
+    // Basic check for output validity
+    if (!output || !output.summary || output.summary.trim().length < 50) {
+        console.warn("AI summary generation resulted in empty or very short output. Falling back.");
+        // Provide a generic fallback summary if AI fails badly
+        return { summary: `Could not generate a detailed AI summary for ${input.drugName}. Basic Information: Components: ${input.components.join(', ') || 'N/A'}. Side Effects: ${input.sideEffects.length > 0 ? input.sideEffects.join(', ') : 'N/A'}. \n\n**IMPORTANT:** Always consult a healthcare professional for medical advice.` };
+    }
+
+    return output;
   }
 );
