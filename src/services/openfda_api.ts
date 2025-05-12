@@ -49,7 +49,7 @@ export async function fetchSideEffectsForIngredients(ingredients: string[]): Pro
     });
 
     if (!labelResponse.ok) {
-      console.error(`OpenFDA label API error for ingredients [${ingredients.join(', ')}]: ${labelResponse.status}`);
+      console.error(`Open FDA label API error for ingredients [${ingredients.join(', ')}]: ${labelResponse.status}`);
       // Return empty side effects on API error, maybe retry or log differently
       return { sideEffects: [] };
     }
