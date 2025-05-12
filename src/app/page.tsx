@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -14,6 +15,7 @@ const RECENT_SUMMARY_KEY = 'chemicalImbalanceRecentSummary';
 
 export default function HomePage() {
   const [currentReport, setCurrentReport] = useState<Report | null>(null);
+  const [submittedMedicalConditions, setSubmittedMedicalConditions] = useState<string | undefined>(undefined);
   const [recentReportSummary, setRecentReportSummary] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +36,7 @@ export default function HomePage() {
     setIsLoading(true);
     setError(null);
     setCurrentReport(null);
+    setSubmittedMedicalConditions(data.medicalConditions);
 
     const result = await getDrugReportAction(data);
 
@@ -53,6 +56,7 @@ export default function HomePage() {
 
   const handleReset = () => {
     setCurrentReport(null);
+    setSubmittedMedicalConditions(undefined);
     setRecentReportSummary(null);
     setError(null);
     setIsLoading(false);
@@ -68,7 +72,7 @@ export default function HomePage() {
       <AppHeader onReset={handleReset} />
       <main className="flex-1 container mx-auto py-8 px-4">
         <div className="max-w-2xl mx-auto space-y-8">
-          {recentReportSummary && !currentReport && (
+          {recentReportSummary && !currentReport && !isLoading && (
             <RecentReportCard summary={recentReportSummary} />
           )}
 
@@ -88,7 +92,7 @@ export default function HomePage() {
              </div>
           )}
 
-          {currentReport && <ReportSection report={currentReport} />}
+          {currentReport && <ReportSection report={currentReport} medicalConditions={submittedMedicalConditions} />}
         </div>
       </main>
       <footer className="py-6 text-center text-sm text-muted-foreground border-t">
