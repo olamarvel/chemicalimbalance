@@ -18,9 +18,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Chemical Imbalance',
   description: 'Understand your medication. Personalized insights.',
-  icons: {
-    icon: '/assert/logo.png',
-  },
 };
 
 export default function RootLayout({
