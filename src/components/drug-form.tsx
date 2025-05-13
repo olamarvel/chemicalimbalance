@@ -100,10 +100,10 @@ export function DrugForm({ onSubmit, isLoading }: DrugFormProps) {
                 name="drugName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Drug Name or NAFDAC Number</FormLabel>
+                    <FormLabel>Drug Name</FormLabel>
                     <div className="flex items-center gap-2">
                       <FormControl>
-                        <Input placeholder="e.g., Paracetamol or A4-1234" {...field} disabled={isProcessingImage || isLoading} />
+                        <Input placeholder="e.g., Tegunil or Reludrine" {...field} disabled={isProcessingImage || isLoading} />
                       </FormControl>
                       <Button
                         type="button"

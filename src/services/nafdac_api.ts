@@ -28,7 +28,7 @@ interface NafdacApiResponse {
   input: any;
 }
 
-const NAFDAC_API_URL = 'https://greenbook.nafdac.gov.ng/api/datatable/drugs';
+const NAFDAC_API_URL = 'https://greenbook.nafdac.gov.ng';
 
 /**
  * Parses the raw active ingredients string from NAFDAC API.
@@ -102,15 +102,23 @@ export async function fetchNafdacDrugDetails(query: string): Promise<NafdacDrugI
     draw: 1,
     columns: [ 
       { data: 'sn', name: '', searchable: true, orderable: false, search: { value: '', regex: false } },
-      { data: 'product_name', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
-      { data: 'registration_number', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
-      { data: 'holder', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
+      { data: 'product_name', name: '', searchable: true, orderable: true, search: { value: trimmedQuery, regex: false } },
+      { data: 'ingredient.ingredient_name', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
+      { data: 'product_category.name', name: '', searchable: true, orderable: false, search: { value: '', regex: false } },
+      { data: 'product_category_id', name: '', searchable: true, orderable: true, search: { value: 1, regex: false } },
+      { data: 'ingredient.synonym', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
+      { data: 'NAFDAC', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
+      { data: 'form.name', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
+      { data: 'route.name', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
+      { data: 'strength', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
+      { data: 'applicant.name', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
+      { data: 'approval_date', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
       { data: 'active_ingredients', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
     ],
     order: [{ column: 1, dir: 'asc' }], 
     start: 0, 
     length: 50, 
-    search: { value: trimmedQuery, regex: false }, 
+    search: { value: '', regex: false }, 
     _: Date.now(), 
   };
 
@@ -142,8 +150,8 @@ export async function fetchNafdacDrugDetails(query: string): Promise<NafdacDrugI
       console.log(`No relevant match found for "${trimmedQuery}" in NAFDAC results after filtering.`);
       return null; 
     }
-
-    return matches.map(item => {
+    
+    return matches.splice(0,1).map(item => {
       let ingredientsString: string | null = null;
 
       if (item.active_ingredients && item.active_ingredients.trim() !== "") {

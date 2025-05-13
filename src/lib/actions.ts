@@ -7,26 +7,43 @@ import type { Report, DrugAnalysisInput, DrugComponent } from '@/types';
 import { fetchNafdacDrugDetails, parseActiveIngredients } from '@/services/nafdac_api';
 import { fetchSideEffectsForIngredients } from '@/services/openfda_api';
 
-export async function getDrugReportAction(input: DrugAnalysisInput): Promise<Report | { error: string }> {
-  console.log(`Starting analysis for input: ${input.drugName}`);
+// Helper function to sanitize drug names
+function sanitizeDrugName(name: string): string {
+  // Removes trailing non-alphanumeric chars (excluding spaces, ., -) and trims whitespace
+  return name.replace(/[^a-zA-Z0-9\s.-]+$/, '').trim();
+}
 
-  // 1. Fetch drug details from NAFDAC API
-  const nafdacResults = await fetchNafdacDrugDetails(input.drugName);
+
+export async function getDrugReportAction(input: DrugAnalysisInput): Promise<Report | { error: string }> {
+  // Sanitize the input drug name first
+  const sanitizedDrugName = sanitizeDrugName(input.drugName);
+  console.log(`Starting analysis for input: ${input.drugName} (Sanitized: ${sanitizedDrugName})`);
+
+
+  if (!sanitizedDrugName) {
+      return { error: "Please enter a valid drug name." };
+  }
+
+  // 1. Fetch drug details from NAFDAC API using the sanitized name
+  const nafdacResults = await fetchNafdacDrugDetails(sanitizedDrugName);
 
   if (!nafdacResults || nafdacResults.length === 0) {
-    return { error: `Information for "${input.drugName}" not found via NAFDAC Greenbook. Please check the drug name or NAFDAC number.` };
+    return { error: `Information for "${sanitizedDrugName}" not found via NAFDAC Greenbook. Please check the drug name or NAFDAC number.` };
   }
 
   // For simplicity, use the first match from NAFDAC.
-  // A more complex app might allow the user to choose if multiple matches occur.
   const drugInfo = nafdacResults[0];
   console.log(`NAFDAC found: ${drugInfo.product_name} (${drugInfo.nafdac_no})`);
+
+  // Also sanitize the product name retrieved from the API, just in case
+  const cleanProductName = sanitizeDrugName(drugInfo.product_name);
+
 
   // 2. Parse active ingredients from NAFDAC result
   const activeIngredientNames = parseActiveIngredients(drugInfo.active_ingredients);
 
   if (activeIngredientNames.length === 0) {
-    return { error: `Could not identify active ingredients for "${drugInfo.product_name}" from NAFDAC data.` };
+    return { error: `Could not identify active ingredients for "${cleanProductName}" from NAFDAC data.` };
   }
   console.log(`Parsed active ingredients: ${activeIngredientNames.join(', ')}`);
 
@@ -39,31 +56,18 @@ export async function getDrugReportAction(input: DrugAnalysisInput): Promise<Rep
 
 
   // 4. Process side effects with AI (if any found)
-  let processedSideEffects: string[] = [];
-  if (rawSideEffects.length > 0) {
-    try {
-      const sideEffectProcessingPromises = rawSideEffects.map(async (effectString) => {
-        if (!effectString || effectString.trim() === "") return "";
-        const aiInput: ProcessSideEffectInput = { originalEffect: effectString };
-        const { bulletPoint } = await processSideEffect(aiInput);
-        return bulletPoint;
-      });
-      processedSideEffects = (await Promise.all(sideEffectProcessingPromises)).filter(bp => bp && bp.trim() !== "");
-      console.log(`Processed ${processedSideEffects.length} side effects with AI.`);
-    } catch (processingError) {
-      console.error("Error processing side effects with AI:", processingError);
-      // Fallback to raw side effects if AI processing fails, filtering empty ones
-      processedSideEffects = rawSideEffects.filter(se => se && se.trim() !== "");
-      console.log(`AI processing failed, falling back to ${processedSideEffects.length} raw side effects.`);
-    }
-  }
-   // Ensure it's an empty array if no side effects after processing/fallback
-   processedSideEffects = processedSideEffects || [];
+  const preProcessSideEffect = rawSideEffects.join(" ")
+  const aiInput: ProcessSideEffectInput = { originalEffect: preProcessSideEffect };
+  const { bulletPoint } = await processSideEffect(aiInput);
+  const bulletPoints = bulletPoint.split(',');
+
+
+  let processedSideEffects: string[] = bulletPoints || [];
 
 
   // 5. Generate AI summary
   const summaryAiInput: SummarizeReportInput = {
-    drugName: drugInfo.product_name, // Use the actual product name from NAFDAC
+    drugName: cleanProductName, // Use the sanitized product name from NAFDAC
     components: activeIngredientNames,
     sideEffects: processedSideEffects, // Use AI-processed or raw (if fallback) side effects
     userConditions: input.medicalConditions || undefined,
@@ -74,7 +78,7 @@ export async function getDrugReportAction(input: DrugAnalysisInput): Promise<Rep
     console.log("AI summary generated successfully.");
     return {
       drugName: input.drugName, // Keep the original user input query
-      productName: drugInfo.product_name,
+      productName: cleanProductName, // Return the sanitized product name
       nafdacNo: drugInfo.nafdac_no,
       components: components,
       sideEffects: processedSideEffects, // Return the processed side effects

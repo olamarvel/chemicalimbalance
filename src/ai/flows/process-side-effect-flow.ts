@@ -35,15 +35,20 @@ const prompt = ai.definePrompt({
   input: {schema: ProcessSideEffectInputSchema},
   output: {schema: ProcessSideEffectOutputSchema},
   prompt: `You are a medical communication assistant.
-Your task is to convert a potentially lengthy or technical side effect description into a single, short, and informative bullet point.
+Your task is to convert a potentially lengthy or technical side effect description into a single, short, straight to the point and yet informative bullet point.
 This bullet point should be easily understandable by a patient.
 Focus on clarity, conciseness, and retain the core medical meaning.
 Directly start the bullet point. Avoid introductory phrases like "This may cause..." or "Potential for..." unless absolutely essential for conveying the meaning accurately.
+Example of valid bullt points maybe
+Sleeplessness,
+vomiting,
+nausea,
+excessive amounts of Acetaminophen may lead to liver damage
 
 Original Side Effect Description:
 "{{{originalEffect}}}"
 
-Concise Bullet Point:
+Concise Bullet Point separated by comma:
 `,
 });
 

@@ -1,18 +1,10 @@
-
-// SummarizeReport.ts
+// src/ai/flows/summarize-report.ts
 'use server';
 
-/**
- * @fileOverview Summarizes the components and potential side effects of a drug, providing context and warnings.
- *
- * - summarizeReport - A function that handles the summarization process.
- * - SummarizeReportInput - The input type for the summarizeReport function.
- * - SummarizeReportOutput - The return type for the summarizeReport function.
- */
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
-
+// Define schemas...
 const SummarizeReportInputSchema = z.object({
   drugName: z.string().describe('The name of the drug to summarize (usually the product name).'),
   components: z.array(z.string()).describe('The active components (ingredients) of the drug.'),
@@ -26,29 +18,25 @@ const SummarizeReportOutputSchema = z.object({
 });
 export type SummarizeReportOutput = z.infer<typeof SummarizeReportOutputSchema>;
 
-export async function summarizeReport(input: SummarizeReportInput): Promise<SummarizeReportOutput> {
-  return summarizeReportFlow(input);
-}
+// Removed the joinHelper function as it's no longer needed.
 
+// Define the prompt without using the join helper in the template
 const prompt = ai.definePrompt({
   name: 'summarizeReportPrompt',
-  input: {schema: SummarizeReportInputSchema},
-  output: {schema: SummarizeReportOutputSchema},
-  // Adjust safety settings if needed, e.g., allow discussion of medical topics
+  input: { schema: SummarizeReportInputSchema },
+  output: { schema: SummarizeReportOutputSchema },
   config: {
-      safetySettings: [
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-          // Potentially adjust other categories like HARASSMENT, HATE_SPEECH, SEXUALLY_EXPLICIT if relevant
-      ],
+    safetySettings: [
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+    ],
+    // Removed customHelpers as the join helper is no longer used.
   },
+  // Use the 'prompt' key for the prompt string content itself
   prompt: `You are a helpful medical information assistant providing a balanced summary about a specific drug. Your goal is to inform, not to provide medical advice.
 
 Drug Name: {{{drugName}}}
 
-Active Components:
-{{#each components}}
-- {{{this}}}
-{{/each}}
+Active Components: {{{componentsString}}}
 
 Potential Side Effects / Warnings (summarized):
 {{#if sideEffects}}
@@ -63,7 +51,7 @@ Potential Side Effects / Warnings (summarized):
 User's Stated Conditions: {{{userConditions}}}
 
 Analysis based on Conditions:
-Analyze the relationship between the drug's active components ({{{join components ", "}}}) and the user's stated conditions ({{{userConditions}}}).
+Analyze the relationship between the drug's active components ({{{componentsString}}}) and the user's stated conditions ({{{userConditions}}}).
 Based on general medical knowledge, briefly indicate if this type of drug *might potentially* be considered by a doctor for conditions like those mentioned. Do NOT state it *is* used or *should* be used. Frame it cautiously (e.g., "Drugs containing [component] are sometimes used in managing...", "Component X has properties relevant to...").
 {{else}}
 User did not specify any medical conditions.
@@ -80,13 +68,9 @@ Summary Task:
 });
 
 
-// Helper for Handlebars to join array elements
-import Handlebars from 'handlebars';
-Handlebars.registerHelper('join', function(context, separator) {
-  if (!Array.isArray(context)) return '';
-  return context.join(separator);
-});
-
+export async function summarizeReport(input: SummarizeReportInput): Promise<SummarizeReportOutput> {
+  return summarizeReportFlow(input);
+}
 
 const summarizeReportFlow = ai.defineFlow(
   {
@@ -95,20 +79,46 @@ const summarizeReportFlow = ai.defineFlow(
     outputSchema: SummarizeReportOutputSchema,
   },
   async input => {
-    // Ensure components array is not empty for the prompt
+    // Prepare input: Join components into a string here
+    const componentsArray = input.components.length > 0 ? input.components : ['Unknown component'];
+    const componentsString = componentsArray.join(', ');
+
     const populatedInput = {
       ...input,
-      components: input.components.length > 0 ? input.components : ['Unknown component'],
+      components: componentsArray, // Keep original array if needed elsewhere, though template doesn't use it now
+      componentsString: componentsString, // Add the new components string for the template
+      sideEffects: input.sideEffects || [],
     };
-    const {output} = await prompt(populatedInput);
 
-    // Basic check for output validity
-    if (!output || !output.summary || output.summary.trim().length < 50) {
+    try {
+      console.log('Attempting to generate AI summary with input:', JSON.stringify(populatedInput, null, 2));
+      // Call the prompt function with the modified input
+      const { output } = await prompt(populatedInput);
+
+      if (!output || !output.summary || output.summary.trim().length < 50) {
         console.warn("AI summary generation resulted in empty or very short output. Falling back.");
-        // Provide a generic fallback summary if AI fails badly
-        return { summary: `Could not generate a detailed AI summary for ${input.drugName}. Basic Information: Components: ${input.components.join(', ') || 'N/A'}. Side Effects: ${input.sideEffects.length > 0 ? input.sideEffects.join(', ') : 'N/A'}. \n\n**IMPORTANT:** Always consult a healthcare professional for medical advice.` };
-    }
+        return { summary: `Could not generate a detailed AI summary for ${input.drugName}. Basic Information: Components: ${populatedInput.componentsString || 'N/A'}. Side Effects: ${input.sideEffects && input.sideEffects.length > 0 ? input.sideEffects.join(', ') : 'N/A'}. 
 
-    return output;
+**IMPORTANT:** Always consult a healthcare professional for medical advice.` };
+      }
+      // Log success after a successful call
+      console.log('AI summary generated successfully.');
+      return output;
+
+    } catch (error: any) {
+      console.error("Error during AI summary generation prompt call:", error); // Log the specific error
+      let errorMessage = "An unknown error occurred.";
+      if (error instanceof Error) {
+          errorMessage = error.message; // This should contain the 'unknown helper join' message if the fix didn't work
+      }
+      if (error.cause) console.error("Error Cause:", error.cause);
+      if (error.details) console.error("Error Details:", error.details);
+      console.error(`Failed to generate AI summary for ${input.drugName}. Input was:`, JSON.stringify(populatedInput, null, 2));
+
+      // Return the fallback summary using the pre-formatted string
+      return { summary: `An error occurred while generating the AI summary for ${input.drugName}. Please consult official sources or a healthcare professional. Basic Information: Components: ${populatedInput.componentsString || 'N/A'}. Side Effects: ${input.sideEffects && input.sideEffects.length > 0 ? input.sideEffects.join(', ') : 'N/A'}. 
+
+**IMPORTANT:** Always consult a healthcare professional for medical advice.` };
+    }
   }
 );
