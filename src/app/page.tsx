@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Report, DrugAnalysisInput } from '@/types';
 import { getDrugReportAction } from '@/lib/actions';
 import { AppHeader } from '@/components/layout/header';
@@ -10,8 +10,15 @@ import { ReportSection } from '@/components/report-section';
 import { RecentReportCard } from '@/components/recent-report-card';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { PrivacyNoticeModal } from '@/components/privacy-notice-modal';
+// import { PrivacyNoticeModal } from '@/components/privacy-notice-modal';
 import { Terminal, Coffee, Twitter, Mail, Loader2, PillBottle, Linkedin } from "lucide-react";
+import dynamic from 'next/dynamic';
+
+const PrivacyNoticeModal = dynamic(() => 
+  import('@/components/privacy-notice-modal').then(mod => mod.PrivacyNoticeModal),
+  { ssr: false, loading: () => <p>Loading privacy notice...</p> }
+);
+
 
 const RECENT_SUMMARY_KEY = 'chemicalImbalanceRecentSummary';
 const PRIVACY_NOTICE_KEY = 'chemicalImbalancePrivacyAccepted_v1';
@@ -49,7 +56,7 @@ export default function HomePage() {
   }, []);
 
 
-  const handleFormSubmit = async (data: DrugAnalysisInput) => {
+  const handleFormSubmit = useCallback(async (data: DrugAnalysisInput) => {
     if (!privacyAccepted) {
       setShowPrivacyModal(true);
       return;
@@ -73,9 +80,9 @@ export default function HomePage() {
       }
     }
     setIsLoading(false);
-  };
+  }, [privacyAccepted]);
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     setCurrentReport(null);
     setSubmittedMedicalConditions(undefined);
     setRecentReportSummary(null);
@@ -86,9 +93,9 @@ export default function HomePage() {
     } catch (e) {
       console.warn("Could not clear recent summary from localStorage:", e);
     }
-  };
+  }, []);
 
-  const handleAcceptPrivacy = () => {
+  const handleAcceptPrivacy = useCallback(() => {
     try {
       localStorage.setItem(PRIVACY_NOTICE_KEY, 'true');
     } catch (e) {
@@ -96,7 +103,7 @@ export default function HomePage() {
     }
     setPrivacyAccepted(true);
     setShowPrivacyModal(false);
-  };
+  }, []);
 
   if (!isClient) {
     return (
@@ -128,6 +135,7 @@ export default function HomePage() {
 
           {isLoading && !currentReport && (
             <div className="flex justify-center items-center p-8">
+              <Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" />
               <p className="text-lg text-muted-foreground">Generating report, please wait...</p>
             </div>
           )}
@@ -172,7 +180,8 @@ export default function HomePage() {
 
         </div>
       </footer>
-      <PrivacyNoticeModal isOpen={showPrivacyModal && !privacyAccepted} onAccept={handleAcceptPrivacy} />
+      {isClient && showPrivacyModal && !privacyAccepted && <PrivacyNoticeModal isOpen={showPrivacyModal && !privacyAccepted} onAccept={handleAcceptPrivacy} /> }
     </div>
   );
 }
+

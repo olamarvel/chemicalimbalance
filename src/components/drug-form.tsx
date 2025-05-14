@@ -19,10 +19,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { DrugAnalysisInput } from "@/types";
 import { Loader2, Camera } from "lucide-react";
-import { useState } from "react";
-import { CameraModal } from "./camera-modal";
+import React, { useState } from "react";
+// import { CameraModal } from "./camera-modal";
 import { extractDrugInfoFromImage, type ExtractDrugInfoInput } from "@/ai/flows/extract-drug-info-flow";
 import { useToast } from "@/hooks/use-toast";
+import dynamic from "next/dynamic";
+
+const CameraModal = dynamic(() => 
+  import('./camera-modal').then(mod => mod.CameraModal),
+  { ssr: false, loading: () => <p>Loading camera...</p> }
+);
 
 const drugFormSchema = z.object({
   drugName: z.string().min(2, {
@@ -39,7 +45,7 @@ interface DrugFormProps {
   isLoading: boolean;
 }
 
-export function DrugForm({ onSubmit, isLoading }: DrugFormProps) {
+export const DrugForm = React.memo(function DrugForm({ onSubmit, isLoading }: DrugFormProps) {
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const { toast } = useToast();
@@ -100,10 +106,10 @@ export function DrugForm({ onSubmit, isLoading }: DrugFormProps) {
                 name="drugName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Drug Name</FormLabel>
+                    <FormLabel>Drug Name or NAFDAC No.</FormLabel>
                     <div className="flex items-center gap-2">
                       <FormControl>
-                        <Input placeholder="e.g., Tegunil or Reludrine" {...field} disabled={isProcessingImage || isLoading} />
+                        <Input placeholder="e.g., Tegunil, Reludrine, or A4-1234" {...field} disabled={isProcessingImage || isLoading} />
                       </FormControl>
                       <Button
                         type="button"
@@ -163,11 +169,15 @@ export function DrugForm({ onSubmit, isLoading }: DrugFormProps) {
           </Form>
         </CardContent>
       </Card>
-      <CameraModal
-        isOpen={showCameraModal}
-        onClose={() => setShowCameraModal(false)}
-        onCapture={handleImageCapture}
-      />
+      {showCameraModal && (
+        <CameraModal
+          isOpen={showCameraModal}
+          onClose={() => setShowCameraModal(false)}
+          onCapture={handleImageCapture}
+        />
+      )}
     </>
   );
-}
+});
+
+DrugForm.displayName = 'DrugForm';

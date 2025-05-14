@@ -1,3 +1,5 @@
+
+import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Lightbulb } from "lucide-react";
@@ -6,7 +8,7 @@ interface RecentReportCardProps {
   summary: string | null;
 }
 
-export function RecentReportCard({ summary }: RecentReportCardProps) {
+export const RecentReportCard = React.memo(function RecentReportCard({ summary }: RecentReportCardProps) {
   if (!summary) {
     return null;
   }
@@ -27,4 +29,6 @@ export function RecentReportCard({ summary }: RecentReportCardProps) {
       </CardContent>
     </Card>
   );
-}
+});
+
+RecentReportCard.displayName = 'RecentReportCard';

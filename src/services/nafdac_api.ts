@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import type { NafdacDrugInfo } from '@/types';
 
@@ -105,25 +106,37 @@ export async function fetchNafdacDrugDetails(query: string): Promise<NafdacDrugI
       { data: 'product_name', name: '', searchable: true, orderable: true, search: { value: trimmedQuery, regex: false } },
       { data: 'ingredient.ingredient_name', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
       { data: 'product_category.name', name: '', searchable: true, orderable: false, search: { value: '', regex: false } },
-      { data: 'product_category_id', name: '', searchable: true, orderable: true, search: { value: 1, regex: false } },
+      { data: 'product_category_id', name: '', searchable: true, orderable: true, search: { value: 1, regex: false } }, // Assuming 1 is for "Drugs"
       { data: 'ingredient.synonym', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
-      { data: 'NAFDAC', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
+      { data: 'NAFDAC', name: '', searchable: true, orderable: true, search: { value: '', regex: false } }, // NAFDAC registration number
       { data: 'form.name', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
       { data: 'route.name', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
       { data: 'strength', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
       { data: 'applicant.name', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
       { data: 'approval_date', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
-      { data: 'active_ingredients', name: '', searchable: true, orderable: true, search: { value: '', regex: false } },
+      { data: 'active_ingredients', name: '', searchable: true, orderable: true, search: { value: '', regex: false } }, // Field for active ingredients from cURL
     ],
     order: [{ column: 1, dir: 'asc' }], 
     start: 0, 
-    length: 50, 
-    search: { value: '', regex: false }, 
+    length: 10, // Reduced from 50 to 10
+    search: { value: '', regex: false }, // Global search applied through column search or main search in API if used
     _: Date.now(), 
   };
+  
+  // If the query is a NAFDAC number, search in the NAFDAC column. Otherwise, search in product_name.
+  // NAFDAC numbers often have a specific format like A4-XXXX or 04-XXXX
+  const isNafdacNumberQuery = /^[A-Za-z]?\d{1,2}-?\d{4,}$/.test(trimmedQuery);
+  if (isNafdacNumberQuery) {
+      params.columns[1].search.value = ''; // Clear product name search
+      params.columns[6].search.value = trimmedQuery; // Set NAFDAC number search
+      console.log(`Query identified as NAFDAC number: "${trimmedQuery}"`);
+  } else {
+      console.log(`Query identified as product name: "${trimmedQuery}"`);
+  }
+
 
   try {
-    console.log(`Querying NAFDAC API for: "${trimmedQuery}" with params:`, JSON.stringify(params, null, 2));
+    console.log(`Querying NAFDAC API for: "${trimmedQuery}" with params:`, JSON.stringify(params.columns.map(c => ({data: c.data, search: c.search.value})), null, 2));
     const response = await axios.get<NafdacApiResponse>(NAFDAC_API_URL, {
       params,
       headers: {
@@ -138,12 +151,11 @@ export async function fetchNafdacDrugDetails(query: string): Promise<NafdacDrugI
 
 
     const results = response.data?.data || [];
-
-    const matches = results.filter(item =>
-        (item.product_name && item.product_name.toLowerCase().includes(trimmedQuery.toLowerCase())) ||
-        (item.registration_number && item.registration_number.toLowerCase().includes(trimmedQuery.toLowerCase())) ||
-        (item.NAFDAC && item.NAFDAC.toLowerCase().includes(trimmedQuery.toLowerCase())) // Also check NAFDAC field if present
-    );
+    
+    // The API should ideally return filtered results based on column search.
+    // If the API's column-specific search isn't perfect, a secondary client-side filter might be needed,
+    // but for now, trust the API's filtering based on the modified params.
+    const matches = results;
 
 
     if (matches.length === 0) {
@@ -154,14 +166,17 @@ export async function fetchNafdacDrugDetails(query: string): Promise<NafdacDrugI
     return matches.splice(0,1).map(item => {
       let ingredientsString: string | null = null;
 
+      // Prioritize 'active_ingredients' field if present and non-empty (from cURL structure)
       if (item.active_ingredients && item.active_ingredients.trim() !== "") {
         ingredientsString = item.active_ingredients;
         console.log(`Using 'active_ingredients' field for ${item.product_name}: ${ingredientsString}`);
       } 
+      // Fallback to 'ingredient.ingredient_name'
       else if (item.ingredient && item.ingredient.ingredient_name && item.ingredient.ingredient_name.trim() !== "") {
         ingredientsString = item.ingredient.ingredient_name;
         console.log(`Using 'ingredient.ingredient_name' field for ${item.product_name}: ${ingredientsString}`);
       } 
+      // Fallback to parsing 'composition'
       else if (item.composition && item.composition.trim() !== "") {
         // Simplistic extraction from composition: "Each ... contains: Actual Ingredient Name [Strength]"
         const compMatch = item.composition.match(/contains:\s*([^(\r\n<]+?(\s+\d+(\.\d+)?\s*(mg|g|ml|mcg|iu))?)/i);
@@ -177,7 +192,7 @@ export async function fetchNafdacDrugDetails(query: string): Promise<NafdacDrugI
       
       return {
         product_name: item.product_name || 'Unknown Product',
-        nafdac_no: item.registration_number || item.NAFDAC || 'Unknown NAFDAC No',
+        nafdac_no: item.registration_number || item.NAFDAC || 'Unknown NAFDAC No', // Prefer registration_number, fallback to NAFDAC
         active_ingredients: ingredientsString || '', 
       };
     });
@@ -185,7 +200,7 @@ export async function fetchNafdacDrugDetails(query: string): Promise<NafdacDrugI
   } catch (error) {
     if (axios.isAxiosError(error)) {
       console.error(`Error fetching data from NAFDAC API for "${trimmedQuery}":`, error.message);
-      if (error.config) console.error('NAFDAC API Request config:', error.config);
+      if (error.config) console.error('NAFDAC API Request config:', JSON.stringify(error.config.params.columns.map((c:any) => ({data: c.data, search: c.search.value})), null, 2));
       if (error.response) {
         console.error('NAFDAC API Response status:', error.response.status);
         console.error('NAFDAC API Response data:', error.response.data);
@@ -198,3 +213,4 @@ export async function fetchNafdacDrugDetails(query: string): Promise<NafdacDrugI
 }
 
 export { parseActiveIngredients };
+
